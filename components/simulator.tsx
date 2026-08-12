@@ -5,11 +5,12 @@ import { usePathname, useRouter } from "next/navigation"
 import { AlertTriangle, ArrowUpRight, Bookmark, BookmarkCheck, Check, Copy, ExternalLink, Info, RefreshCw, Rocket, Search } from "lucide-react"
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { buildSimulationRows, resolveSimulationBasis } from "@/lib/calculations"
-import { CHAIN_OPTIONS, getChainOption, parseTokenInput } from "@/lib/chains"
+import { getChainOption, parseTokenInput } from "@/lib/chains"
 import { formatAge, formatMultiple, formatPercent, formatToken, formatUsd, parseNumericInput, truncateAddress } from "@/lib/format"
 import { getSavedTokens, getSettings, pushHistory, setSavedTokens } from "@/lib/storage"
 import type { SavedToken, SupplyKind, TokenApiResponse } from "@/lib/types"
 import { ChainIcon } from "./chain-icon"
+import { ChainSelect } from "./chain-select"
 import { ShareDialog } from "./share-dialog"
 
 type Props = { initialChain?: string; initialAddress?: string }
@@ -125,11 +126,11 @@ export function Simulator({ initialChain = "all", initialAddress = "" }: Props) 
         <p>Paste a token address, enter the tokens you own, and inspect each target with market-cap and FDV assumptions kept separate.</p>
       </div>
 
-      <section className="terminal-panel" aria-labelledby="search-title">
+      <section className="terminal-panel search-panel" aria-labelledby="search-title">
         <div className="panel-head"><h2 className="panel-title" id="search-title">Token Search</h2><span className="muted tnum">OFFICIAL API · CACHED</span></div>
         <div className="panel-body">
           <form className="search-form" onSubmit={submit}>
-            <div className="field"><label htmlFor="chain">Chain</label><div className="chain-select"><ChainIcon chainId={chain} /><select className="select" id="chain" value={chain} onChange={(event) => setChain(event.target.value)}>{CHAIN_OPTIONS.map((option) => <option value={option.id} key={option.id}>{option.label}</option>)}</select></div></div>
+            <div className="field"><label htmlFor="chain">Chain</label><ChainSelect disabled={loading} onChange={setChain} value={chain} /></div>
             <div className="field"><label htmlFor="address">Token Address or DEX Screener URL</label><input className="input" id="address" value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Paste address or DEX Screener URL" aria-invalid={Boolean(error)} aria-describedby="address-help" required /><span className="field-help" id="address-help">All Chains auto-detects the network; the highest-liquidity matching pair is selected.</span></div>
             <button className="btn btn-primary" data-state={loading ? "loading" : "idle"} disabled={loading || !address.trim()} type="submit">{loading ? <RefreshCw size={17} /> : <Search size={17} />} {loading ? "Loading" : "Find Token"}</button>
           </form>

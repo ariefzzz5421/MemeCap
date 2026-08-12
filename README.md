@@ -76,11 +76,11 @@ Server memory caching, Next.js fetch revalidation, request deduplication, aborta
 
 ## DEX Screener service pricing
 
-DEX Screener does not expose a public pricing API for Token Boost or Enhanced Token Info. Those services show **Check Current Price** and link to the official checkout/marketplace. Official documentation says Boost packs last 12–24 hours and the Golden Ticker requires at least 500 active Boosts. The only fixed advertising figure shown is the official minimum budget stated on DEX Screener's direct advertising documentation, with a last-checked date. Re-check all prices before purchasing.
+DEX Screener does not expose Boost pack prices through its public API. The `/dex-boost` page therefore presents a dated checkout snapshot verified directly in the official token-page Boost modal on August 13, 2026: 10 Boosts for $99 (12 hours), 30 for $249 (12 hours), 50 for $399 (12 hours), 100 for $899 (24 hours), and 500 for $3,999 (24 hours). The Golden Ticker requires at least 500 active Boosts. Re-check the official checkout before purchasing because pricing can change.
 
 ## Supplied crypto logos
 
-All 35 user-provided crypto logo files are preserved under `public/crypto-logos/`. Simulator chain controls use the relevant Solana, Ethereum, Base, BNB Chain, Polygon, Avalanche, Optimism, and Sui assets. Remaining token and ecosystem logos stay available in the repository for future features.
+All 35 user-provided crypto logo files are preserved under `public/crypto-logos/`. Simulator chain controls use the relevant Solana, Ethereum, Base, BNB Chain, Polygon, Avalanche, Optimism, and Sui assets. Arbitrum and PulseChain use local copies of DEX Screener's official public chain assets. Remaining token and ecosystem logos stay available in the repository for future features.
 
 ## Deployment to Vercel
 

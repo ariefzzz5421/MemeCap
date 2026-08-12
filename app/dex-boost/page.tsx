@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import Image from "next/image"
 import { ArrowUpRight, Clock3, Crown, Eye, Rocket, ShieldAlert } from "lucide-react"
 
 export const metadata: Metadata = {
@@ -7,6 +8,17 @@ export const metadata: Metadata = {
 }
 
 const LAST_CHECKED = "August 13, 2026"
+
+const BOOST_PACKS = [
+  { boosts: 10, duration: "12 hours", price: 99, featured: false },
+  { boosts: 30, duration: "12 hours", price: 249, featured: false },
+  { boosts: 50, duration: "12 hours", price: 399, featured: true },
+] as const
+
+const EXTENDED_PACKS = [
+  { boosts: 100, duration: "24 hours", price: 899 },
+  { boosts: 500, duration: "24 hours", price: 3999 },
+] as const
 
 const BOOST_FACTS = [
   { label: "Primary effect", value: "Higher Trending Score", detail: "A purchased pack temporarily increases the token's score and can improve visibility on DEX Screener.", icon: Rocket },
@@ -36,16 +48,28 @@ export default function DexBoostPage() {
 
       <section className="terminal-panel" aria-labelledby="boost-price-title">
         <div className="panel-head"><h2 className="panel-title" id="boost-price-title">Current Boost Pricing</h2><span className="muted tnum">CHECKED · {LAST_CHECKED}</span></div>
-        <div className="boost-price-grid">
-          <div className="boost-price-status">
-            <span>Official public price feed</span>
-            <strong>Not available</strong>
-          </div>
-          <div className="boost-price-copy">
-            <p>DEX Screener’s public API exposes active amount and total amount, but it does not expose Boost pack prices. Because checkout pricing can change, MemeCap does not hardcode an unverified dollar figure.</p>
-            <p>To see the exact current price, open a token page in a web browser and use the yellow <strong>Boost</strong> button. Boost purchasing is not available in the mobile app.</p>
-          </div>
-          <a className="btn btn-primary" href="https://dexscreener.com/boosting" target="_blank" rel="noreferrer">Check Current Official Price <ArrowUpRight size={16} /></a>
+        <div className="boost-pricing-intro">
+          <Image alt="MemeCap lightning boost emblem" className="boost-bolt-art" height={112} priority src="/boost/boost-bolt.png" width={112} />
+          <div><strong>Official checkout snapshot</strong><p>Verified directly in DEX Screener’s token-page Boost checkout. Prices are not returned by the public API and can change, so always recheck before paying.</p></div>
+        </div>
+        <div className="boost-pack-grid">
+          {BOOST_PACKS.map((pack) => (
+            <article className="boost-pack" data-featured={pack.featured || undefined} key={pack.boosts}>
+              <div className="boost-pack-mark"><Image alt="" aria-hidden="true" height={34} src="/boost/boost-bolt.png" width={34} /><span>{pack.boosts}×</span></div>
+              <strong>${pack.price.toLocaleString("en-US")}</strong>
+              <span>{pack.duration}</span>
+              <small>${(pack.price / pack.boosts).toFixed(2)} per Boost</small>
+            </article>
+          ))}
+        </div>
+        <div className="boost-extended-row tnum">
+          <span>Also verified:</span>
+          {EXTENDED_PACKS.map((pack) => <strong key={pack.boosts}>{pack.boosts}× · ${pack.price.toLocaleString("en-US")} · {pack.duration}</strong>)}
+        </div>
+        <div className="boost-price-copy panel-body">
+          <p>Boosts temporarily raise a token’s <strong>Trending Score</strong> and visible active-Boost count. The official checkout says the Golden Ticker unlocks at 500 active Boosts.</p>
+          <p>Boosting does not add liquidity, guarantee Trending rank, create buyers, or guarantee price appreciation.</p>
+          <a className="btn btn-primary" href="https://dexscreener.com/" target="_blank" rel="noreferrer">Open DEX Screener <ArrowUpRight size={16} /></a>
         </div>
       </section>
 
