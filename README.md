@@ -1,0 +1,2 @@
+# MemeCap
+memecoin simulator 
