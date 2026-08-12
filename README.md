@@ -4,7 +4,7 @@ MemeCap Simulator is a Next.js application that estimates a memecoin position at
 
 ## Product behavior
 
-- Search by contract address and chain.
+- Search by contract address or DEX Screener URL with optional all-chain auto-detection.
 - Select the pair with the highest reported USD liquidity.
 - Keep market-cap simulations separate from FDV simulations.
 - Derive and label estimated supply only when DEX Screener supplies a valuation and USD price.
@@ -42,6 +42,8 @@ npm run build
 
 - `/` — simulator and token search
 - `/token/[chain]/[address]` — shareable token dashboard
+- `/calculator` — fixed 1B-supply holdings-value matrix
+- `/dex-boost` — official Boost mechanics, pricing availability, and risk guide
 - `/watchlist` — saved tokens
 - `/history` — saved simulations
 - `/guide` — calculation and risk guide
@@ -65,6 +67,7 @@ Displayed position values are mathematical estimates, not guaranteed sale procee
 The application uses official endpoints documented at [DEX Screener API Reference](https://docs.dexscreener.com/api/reference):
 
 - `GET /token-pairs/v1/{chainId}/{tokenAddress}` — token pools, 300 requests/minute
+- `GET /latest/dex/search?q={address}` — all-chain address and pair lookup, 300 requests/minute
 - `GET /token-boosts/latest/v1` — latest boosts, 60 requests/minute
 - `GET /token-boosts/top/v1` — top active boosts, 60 requests/minute
 - `GET /orders/v1/{chainId}/{tokenAddress}` — paid-order status, 60 requests/minute (current responses wrap records in an `orders` field; the proxy also tolerates the older array shape)
@@ -73,7 +76,11 @@ Server memory caching, Next.js fetch revalidation, request deduplication, aborta
 
 ## DEX Screener service pricing
 
-DEX Screener does not expose a public pricing API for Token Boost or Enhanced Token Info. Those services show **Check Current Price** and link to the official marketplace. The only fixed figure shown is the official minimum budget stated on DEX Screener's direct advertising documentation, with a last-checked date. Re-check all prices before purchasing.
+DEX Screener does not expose a public pricing API for Token Boost or Enhanced Token Info. Those services show **Check Current Price** and link to the official checkout/marketplace. Official documentation says Boost packs last 12–24 hours and the Golden Ticker requires at least 500 active Boosts. The only fixed advertising figure shown is the official minimum budget stated on DEX Screener's direct advertising documentation, with a last-checked date. Re-check all prices before purchasing.
+
+## Supplied crypto logos
+
+All 35 user-provided crypto logo files are preserved under `public/crypto-logos/`. Simulator chain controls use the relevant Solana, Ethereum, Base, BNB Chain, Polygon, Avalanche, Optimism, and Sui assets. Remaining token and ecosystem logos stay available in the repository for future features.
 
 ## Deployment to Vercel
 

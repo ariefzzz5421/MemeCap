@@ -4,6 +4,7 @@ import type { DexPair, TokenApiResponse, TokenOrder } from "@/lib/types"
 export const runtime = "nodejs"
 
 const SUPPORTED_CHAINS = new Set([
+  "all",
   "solana",
   "ethereum",
   "base",
@@ -31,6 +32,7 @@ function writeCache(key: string, value: CachedResponse) {
 }
 
 function isValidAddress(chain: string, address: string) {
+  if (chain === "all") return /^[a-zA-Z0-9:_-]{20,100}$/.test(address)
   if (["ethereum", "base", "bsc", "arbitrum", "polygon", "avalanche", "optimism", "pulsechain"].includes(chain)) {
     return /^0x[a-fA-F0-9]{40}$/.test(address)
   }
@@ -50,9 +52,33 @@ async function dexFetch<T>(path: string, revalidate: number): Promise<T> {
   return response.json() as Promise<T>
 }
 
+async function findPairs(chain: string, address: string) {
+  if (chain !== "all") {
+    return dexFetch<DexPair[]>(`/token-pairs/v1/${encodeURIComponent(chain)}/${encodeURIComponent(address)}`, 20)
+  }
+
+  const result = await dexFetch<{ pairs?: DexPair[] }>(`/latest/dex/search?q=${encodeURIComponent(address)}`, 20)
+  const needle = address.toLowerCase()
+  return (result.pairs ?? []).filter((pair) =>
+    pair.baseToken.address.toLowerCase() === needle || pair.pairAddress.toLowerCase() === needle,
+  )
+}
+
 async function loadToken(chain: string, address: string): Promise<TokenApiResponse> {
-  const [pairs, latestBoosts, topBoosts, orders] = await Promise.all([
-    dexFetch<DexPair[]>(`/token-pairs/v1/${encodeURIComponent(chain)}/${encodeURIComponent(address)}`, 20),
+  const pairs = await findPairs(chain, address)
+
+  if (!Array.isArray(pairs) || pairs.length === 0) {
+    throw new Error(chain === "all"
+      ? "Token not found across DEX Screener chains, or it has no indexed liquidity pool."
+      : "Token not found on this chain, or it has no indexed liquidity pool.")
+  }
+
+  const sorted = [...pairs].sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0))
+  const pair = sorted[0]
+  const detectedChain = pair.chainId.toLowerCase()
+  const tokenAddress = pair.baseToken.address
+
+  const [latestBoosts, topBoosts, orders] = await Promise.all([
     dexFetch<Array<{ chainId?: string; tokenAddress?: string; amount?: number; totalAmount?: number }>>(
       "/token-boosts/latest/v1",
       60,
@@ -61,17 +87,10 @@ async function loadToken(chain: string, address: string): Promise<TokenApiRespon
       "/token-boosts/top/v1",
       60,
     ).catch(() => []),
-    dexFetch<TokenOrder[] | { orders?: TokenOrder[] }>(`/orders/v1/${encodeURIComponent(chain)}/${encodeURIComponent(address)}`, 300).catch(() => []),
+    dexFetch<TokenOrder[] | { orders?: TokenOrder[] }>(`/orders/v1/${encodeURIComponent(detectedChain)}/${encodeURIComponent(tokenAddress)}`, 300).catch(() => []),
   ])
-
-  if (!Array.isArray(pairs) || pairs.length === 0) {
-    throw new Error("Token not found on this chain, or it has no indexed liquidity pool.")
-  }
-
-  const sorted = [...pairs].sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0))
-  const pair = sorted[0]
   const matches = (item: { chainId?: string; tokenAddress?: string }) =>
-    item.chainId?.toLowerCase() === chain && item.tokenAddress?.toLowerCase() === address.toLowerCase()
+    item.chainId?.toLowerCase() === detectedChain && item.tokenAddress?.toLowerCase() === tokenAddress.toLowerCase()
   const latest = latestBoosts.find(matches)
   const topIndex = topBoosts.findIndex(matches)
   const top = topIndex >= 0 ? topBoosts[topIndex] : undefined
@@ -100,7 +119,7 @@ export async function GET(request: Request) {
   const address = (searchParams.get("address") ?? "").trim()
 
   if (!SUPPORTED_CHAINS.has(chain)) {
-    return Response.json({ error: "Unsupported chain. Choose one of the listed networks." }, { status: 400 })
+    return Response.json({ error: "Unsupported chain. Use All Chains or choose one of the listed networks." }, { status: 400 })
   }
   if (!isValidAddress(chain, address)) {
     return Response.json({ error: "Invalid contract address for the selected chain." }, { status: 400 })

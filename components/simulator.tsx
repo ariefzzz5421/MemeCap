@@ -5,19 +5,16 @@ import { usePathname, useRouter } from "next/navigation"
 import { AlertTriangle, ArrowUpRight, Bookmark, BookmarkCheck, Check, Copy, ExternalLink, Info, RefreshCw, Rocket, Search } from "lucide-react"
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { buildSimulationRows, resolveSimulationBasis } from "@/lib/calculations"
+import { CHAIN_OPTIONS, getChainOption, parseTokenInput } from "@/lib/chains"
 import { formatAge, formatMultiple, formatPercent, formatToken, formatUsd, parseNumericInput, truncateAddress } from "@/lib/format"
 import { getSavedTokens, getSettings, pushHistory, setSavedTokens } from "@/lib/storage"
 import type { SavedToken, SupplyKind, TokenApiResponse } from "@/lib/types"
+import { ChainIcon } from "./chain-icon"
 import { ShareDialog } from "./share-dialog"
-
-const CHAINS = [
-  ["solana", "Solana"], ["ethereum", "Ethereum"], ["base", "Base"], ["bsc", "BNB Chain"], ["arbitrum", "Arbitrum"],
-  ["polygon", "Polygon"], ["avalanche", "Avalanche"], ["optimism", "Optimism"], ["sui", "Sui"], ["pulsechain", "PulseChain"],
-]
 
 type Props = { initialChain?: string; initialAddress?: string }
 
-export function Simulator({ initialChain = "solana", initialAddress = "" }: Props) {
+export function Simulator({ initialChain = "all", initialAddress = "" }: Props) {
   const router = useRouter()
   const pathname = usePathname()
   const [chain, setChain] = useState(initialChain)
@@ -38,21 +35,23 @@ export function Simulator({ initialChain = "solana", initialAddress = "" }: Prop
   const settings = useMemo(() => getSettings(), [])
 
   const fetchToken = useCallback(async (nextChain: string, nextAddress: string, updateRoute = true) => {
-    if (!nextAddress.trim()) return
+    const parsedInput = parseTokenInput(nextAddress)
+    if (!parsedInput.address) return
     requestRef.current?.abort()
     const controller = new AbortController()
     requestRef.current = controller
     setLoading(true)
     setError("")
     try {
-      const response = await fetch(`/api/dex/token?chain=${encodeURIComponent(nextChain)}&address=${encodeURIComponent(nextAddress.trim())}`, { signal: controller.signal })
+      const response = await fetch(`/api/dex/token?chain=${encodeURIComponent(nextChain)}&address=${encodeURIComponent(parsedInput.address)}`, { signal: controller.signal })
       const payload = await response.json() as TokenApiResponse & { error?: string }
       if (!response.ok) throw new Error(payload.error ?? "Could not load this token. Check the address and chain.")
       setData(payload)
+      setAddress(payload.pair.baseToken.address)
       setSecondsAgo(0)
-      const existing = getSavedTokens().some((item) => item.chainId === nextChain && item.address.toLowerCase() === nextAddress.trim().toLowerCase())
+      const existing = getSavedTokens().some((item) => item.chainId === payload.pair.chainId && item.address.toLowerCase() === payload.pair.baseToken.address.toLowerCase())
       setSaved(existing)
-      if (updateRoute && pathname === "/") router.push(`/token/${nextChain}/${nextAddress.trim()}`)
+      if (updateRoute && pathname === "/") router.push(`/token/${payload.pair.chainId}/${payload.pair.baseToken.address}`)
     } catch (reason) {
       if (reason instanceof DOMException && reason.name === "AbortError") return
       setData(null)
@@ -70,9 +69,9 @@ export function Simulator({ initialChain = "solana", initialAddress = "" }: Prop
   useEffect(() => {
     if (!data) return
     const tick = window.setInterval(() => setSecondsAgo((value) => value + 1), 1000)
-    const refresh = window.setInterval(() => void fetchToken(chain, address, false), settings.refreshSeconds * 1000)
+    const refresh = window.setInterval(() => void fetchToken(data.pair.chainId, data.pair.baseToken.address, false), settings.refreshSeconds * 1000)
     return () => { window.clearInterval(tick); window.clearInterval(refresh) }
-  }, [address, chain, data, fetchToken, settings.refreshSeconds])
+  }, [data, fetchToken, settings.refreshSeconds])
 
   function submit(event: FormEvent) {
     event.preventDefault()
@@ -130,8 +129,8 @@ export function Simulator({ initialChain = "solana", initialAddress = "" }: Prop
         <div className="panel-head"><h2 className="panel-title" id="search-title">Token Search</h2><span className="muted tnum">OFFICIAL API · CACHED</span></div>
         <div className="panel-body">
           <form className="search-form" onSubmit={submit}>
-            <div className="field"><label htmlFor="chain">Chain</label><select className="select" id="chain" value={chain} onChange={(event) => setChain(event.target.value)}>{CHAINS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></div>
-            <div className="field"><label htmlFor="address">Token Contract Address</label><input className="input" id="address" value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Paste token address" aria-invalid={Boolean(error)} aria-describedby="address-help" required /><span className="field-help" id="address-help">The highest-liquidity pair will be selected automatically.</span></div>
+            <div className="field"><label htmlFor="chain">Chain</label><div className="chain-select"><ChainIcon chainId={chain} /><select className="select" id="chain" value={chain} onChange={(event) => setChain(event.target.value)}>{CHAIN_OPTIONS.map((option) => <option value={option.id} key={option.id}>{option.label}</option>)}</select></div></div>
+            <div className="field"><label htmlFor="address">Token Address or DEX Screener URL</label><input className="input" id="address" value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Paste address or DEX Screener URL" aria-invalid={Boolean(error)} aria-describedby="address-help" required /><span className="field-help" id="address-help">All Chains auto-detects the network; the highest-liquidity matching pair is selected.</span></div>
             <button className="btn btn-primary" data-state={loading ? "loading" : "idle"} disabled={loading || !address.trim()} type="submit">{loading ? <RefreshCw size={17} /> : <Search size={17} />} {loading ? "Loading" : "Find Token"}</button>
           </form>
         </div>
@@ -142,7 +141,7 @@ export function Simulator({ initialChain = "solana", initialAddress = "" }: Prop
             <div className="token-header">
               <div className="token-identity">
                 <div className="token-logo">{pair.info?.imageUrl ? <Image src={pair.info.imageUrl} alt={`${pair.baseToken.name} logo`} width={48} height={48} unoptimized /> : pair.baseToken.symbol.slice(0, 2)}</div>
-                <div><div className="token-name">{pair.baseToken.name} / ${pair.baseToken.symbol}</div><div className="token-meta"><span>{pair.chainId} · {pair.dexId}</span><button className="btn btn-quiet" onClick={copyAddress} type="button">{copied ? <Check size={14} /> : <Copy size={14} />} {truncateAddress(pair.baseToken.address)}</button></div></div>
+                <div><div className="token-name">{pair.baseToken.name} / ${pair.baseToken.symbol}</div><div className="token-meta"><span className="detected-chain"><ChainIcon chainId={pair.chainId} size={20} /> {getChainOption(pair.chainId).label} · {pair.dexId}</span><button className="btn btn-quiet" onClick={copyAddress} type="button">{copied ? <Check size={14} /> : <Copy size={14} />} {truncateAddress(pair.baseToken.address)}</button></div></div>
               </div>
               <div className="token-actions"><button className="btn" onClick={toggleSave} type="button">{saved ? <BookmarkCheck size={16} /> : <Bookmark size={16} />} {saved ? "Saved" : "Save Token"}</button><a className="btn" href={pair.url} target="_blank" rel="noreferrer">View on DEX Screener <ArrowUpRight size={16} /></a></div>
             </div>
@@ -165,7 +164,7 @@ export function Simulator({ initialChain = "solana", initialAddress = "" }: Prop
         <>
           <div className="workspace-grid">
             <section className="panel position-panel" aria-labelledby="position-title">
-              <div className="panel-head"><h2 className="panel-title" id="position-title">My Position</h2><button className="btn icon-btn btn-quiet" onClick={() => void fetchToken(chain, address, false)} aria-label="Refresh market data"><RefreshCw size={16} /></button></div>
+              <div className="panel-head"><h2 className="panel-title" id="position-title">My Position</h2><button className="btn icon-btn btn-quiet" onClick={() => void fetchToken(pair.chainId, pair.baseToken.address, false)} aria-label="Refresh market data"><RefreshCw size={16} /></button></div>
               <div className="panel-body position-form">
                 <div className="field"><label htmlFor="tokens">Tokens Owned</label><input className="input tnum" id="tokens" inputMode="decimal" value={tokenAmount} onChange={(event) => setTokenAmount(event.target.value)} /></div>
                 <div className="field"><label htmlFor="cost">Initial Cost / Cost Basis (USD)</label><input className="input tnum" id="cost" inputMode="decimal" value={costBasis} onChange={(event) => setCostBasis(event.target.value)} /></div>

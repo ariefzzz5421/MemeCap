@@ -6,9 +6,10 @@ export const DEX_SERVICES: DexService[] = [
   {
     name: "Token Boost",
     priceLabel: "Check Current Price",
-    description: "Temporarily increases a token’s Trending Score. Price is not exposed by a public pricing API.",
+    description: "Temporarily increases Trending Score for 12–24 hours depending on the pack. Public APIs do not expose pack prices.",
     officialUrl: "https://dexscreener.com/boosting",
     lastChecked: DEX_SERVICES_LAST_CHECKED,
+    note: "Open the token page in a web browser and use the yellow Boost button to verify checkout pricing.",
   },
   {
     name: "Enhanced Token Info",
