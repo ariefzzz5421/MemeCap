@@ -3,7 +3,7 @@
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
 import { AlertTriangle, ArrowUpRight, Bookmark, BookmarkCheck, Check, Copy, ExternalLink, Info, RefreshCw, Rocket, Search } from "lucide-react"
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { ClipboardEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { buildSimulationRows, resolveSimulationBasis } from "@/lib/calculations"
 import { getChainOption, parseTokenInput } from "@/lib/chains"
 import { formatAge, formatMultiple, formatPercent, formatToken, formatUsd, parseNumericInput, truncateAddress } from "@/lib/format"
@@ -35,30 +35,40 @@ export function Simulator({ initialChain = "all", initialAddress = "" }: Props) 
   const requestRef = useRef<AbortController | null>(null)
   const settings = useMemo(() => getSettings(), [])
 
-  const fetchToken = useCallback(async (nextChain: string, nextAddress: string, updateRoute = true) => {
+  const fetchToken = useCallback(async (nextChain: string, nextAddress: string, updateRoute = true, preserveExistingData = false) => {
     const parsedInput = parseTokenInput(nextAddress)
     if (!parsedInput.address) return
+    const requestedChain = parsedInput.chain ?? nextChain
     requestRef.current?.abort()
     const controller = new AbortController()
     requestRef.current = controller
     setLoading(true)
     setError("")
     try {
-      const response = await fetch(`/api/dex/token?chain=${encodeURIComponent(nextChain)}&address=${encodeURIComponent(parsedInput.address)}`, { signal: controller.signal })
+      const response = await fetch(`/api/dex/token?chain=${encodeURIComponent(requestedChain)}&address=${encodeURIComponent(parsedInput.address)}`, { signal: controller.signal })
       const payload = await response.json() as TokenApiResponse & { error?: string }
       if (!response.ok) throw new Error(payload.error ?? "Could not load this token. Check the address and chain.")
+      if (controller.signal.aborted || requestRef.current !== controller) return
       setData(payload)
+      setChain(payload.pair.chainId)
       setAddress(payload.pair.baseToken.address)
       setSecondsAgo(0)
       const existing = getSavedTokens().some((item) => item.chainId === payload.pair.chainId && item.address.toLowerCase() === payload.pair.baseToken.address.toLowerCase())
       setSaved(existing)
-      if (updateRoute && pathname === "/") router.push(`/token/${payload.pair.chainId}/${payload.pair.baseToken.address}`)
+      const tokenPath = `/token/${payload.pair.chainId}/${payload.pair.baseToken.address}`
+      if (updateRoute && pathname !== tokenPath) router.push(tokenPath)
     } catch (reason) {
       if (reason instanceof DOMException && reason.name === "AbortError") return
-      setData(null)
-      setError(reason instanceof Error ? reason.message : "DEX Screener is unavailable. Try again shortly.")
+      if (requestRef.current !== controller) return
+      if (!preserveExistingData) {
+        setData(null)
+        setError(reason instanceof Error ? reason.message : "DEX Screener is unavailable. Try again shortly.")
+      }
     } finally {
-      setLoading(false)
+      if (requestRef.current === controller) {
+        requestRef.current = null
+        setLoading(false)
+      }
     }
   }, [pathname, router])
 
@@ -70,13 +80,24 @@ export function Simulator({ initialChain = "all", initialAddress = "" }: Props) 
   useEffect(() => {
     if (!data) return
     const tick = window.setInterval(() => setSecondsAgo((value) => value + 1), 1000)
-    const refresh = window.setInterval(() => void fetchToken(data.pair.chainId, data.pair.baseToken.address, false), settings.refreshSeconds * 1000)
+    const refresh = window.setInterval(() => void fetchToken(data.pair.chainId, data.pair.baseToken.address, false, true), settings.refreshSeconds * 1000)
     return () => { window.clearInterval(tick); window.clearInterval(refresh) }
   }, [data, fetchToken, settings.refreshSeconds])
 
   function submit(event: FormEvent) {
     event.preventDefault()
     void fetchToken(chain, address)
+  }
+
+  function analyzePaste(event: ClipboardEvent<HTMLInputElement>) {
+    const pasted = event.clipboardData.getData("text").trim()
+    if (!pasted) return
+    event.preventDefault()
+    const parsed = parseTokenInput(pasted)
+    const requestedChain = parsed.chain ?? "all"
+    setAddress(pasted)
+    setChain(requestedChain)
+    void fetchToken(requestedChain, pasted)
   }
 
   const pair = data?.pair ?? null
@@ -127,15 +148,15 @@ export function Simulator({ initialChain = "all", initialAddress = "" }: Props) 
       </div>
 
       <section className="terminal-panel search-panel" aria-labelledby="search-title">
-        <div className="panel-head"><h2 className="panel-title" id="search-title">Token Search</h2><span className="muted tnum">OFFICIAL API · CACHED</span></div>
+        <div className="panel-head"><h2 className="panel-title" id="search-title">Token Search</h2></div>
         <div className="panel-body">
           <form className="search-form" onSubmit={submit}>
             <div className="field"><label htmlFor="chain">Chain</label><ChainSelect disabled={loading} onChange={setChain} value={chain} /></div>
-            <div className="field"><label htmlFor="address">Token Address or DEX Screener URL</label><input className="input" id="address" value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Paste address or DEX Screener URL" aria-invalid={Boolean(error)} aria-describedby="address-help" required /><span className="field-help" id="address-help">All Chains auto-detects the network; the highest-liquidity matching pair is selected.</span></div>
-            <button className="btn btn-primary" data-state={loading ? "loading" : "idle"} disabled={loading || !address.trim()} type="submit">{loading ? <RefreshCw size={17} /> : <Search size={17} />} {loading ? "Loading" : "Find Token"}</button>
+            <div className="field"><label htmlFor="address">Contract Address or DEX Screener URL</label><input className="input" id="address" value={address} onChange={(event) => { setAddress(event.target.value); if (error) setError("") }} onPaste={analyzePaste} placeholder="Paste a contract address" aria-invalid={Boolean(error)} aria-describedby="address-help" required /><span className="field-help" id="address-help">{loading && chain === "all" ? "Detecting the network and primary liquidity pair\u2026" : pair ? `Detected ${getChainOption(pair.chainId).label} \u00b7 highest-liquidity pair selected.` : "Paste a CA to auto-detect its chain. EVM addresses are verified through live DEX Screener pairs."}</span></div>
+            <button className="btn btn-primary search-submit" data-state={loading ? "loading" : "idle"} disabled={loading || !address.trim()} type="submit">{loading ? <RefreshCw size={17} /> : <Search size={17} />} {loading ? "Analyzing" : "Analyze"}</button>
           </form>
+          {error && <div className="error-box" role="alert"><AlertTriangle aria-hidden="true" size={18} /><span>{error}</span></div>}
         </div>
-        {error && <div className="error-box" role="alert">{error}</div>}
         {loading && !data && <LoadingToken />}
         {pair && data && (
           <>

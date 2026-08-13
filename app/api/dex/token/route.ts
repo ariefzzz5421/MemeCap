@@ -3,20 +3,6 @@ import type { DexPair, TokenApiResponse, TokenOrder } from "@/lib/types"
 
 export const runtime = "nodejs"
 
-const SUPPORTED_CHAINS = new Set([
-  "all",
-  "solana",
-  "ethereum",
-  "base",
-  "bsc",
-  "arbitrum",
-  "polygon",
-  "avalanche",
-  "optimism",
-  "sui",
-  "pulsechain",
-])
-
 type CachedResponse = { expiresAt: number; data?: TokenApiResponse; promise?: Promise<TokenApiResponse> }
 const globalCache = globalThis as typeof globalThis & { __memecapCache?: Map<string, CachedResponse> }
 const cache = globalCache.__memecapCache ?? new Map<string, CachedResponse>()
@@ -31,13 +17,14 @@ function writeCache(key: string, value: CachedResponse) {
   cache.set(key, value)
 }
 
+function isValidChainId(chain: string) {
+  return chain === "all" || /^[a-z0-9][a-z0-9-]{0,39}$/.test(chain)
+}
+
 function isValidAddress(chain: string, address: string) {
-  if (chain === "all") return /^[a-zA-Z0-9:_-]{20,100}$/.test(address)
-  if (["ethereum", "base", "bsc", "arbitrum", "polygon", "avalanche", "optimism", "pulsechain"].includes(chain)) {
-    return /^0x[a-fA-F0-9]{40}$/.test(address)
-  }
+  if (/^0x/i.test(address)) return /^0x[a-fA-F0-9]{40}$/.test(address)
   if (chain === "solana") return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)
-  return /^[a-zA-Z0-9:_-]{20,80}$/.test(address)
+  return /^[a-zA-Z0-9:_-]{20,100}$/.test(address)
 }
 
 async function dexFetch<T>(path: string, revalidate: number): Promise<T> {
@@ -118,8 +105,8 @@ export async function GET(request: Request) {
   const chain = (searchParams.get("chain") ?? "").toLowerCase().trim()
   const address = (searchParams.get("address") ?? "").trim()
 
-  if (!SUPPORTED_CHAINS.has(chain)) {
-    return Response.json({ error: "Unsupported chain. Use All Chains or choose one of the listed networks." }, { status: 400 })
+  if (!isValidChainId(chain)) {
+    return Response.json({ error: "Invalid DEX Screener chain ID. Use All Chains to auto-detect the network." }, { status: 400 })
   }
   if (!isValidAddress(chain, address)) {
     return Response.json({ error: "Invalid contract address for the selected chain." }, { status: 400 })

@@ -17,6 +17,7 @@ export const CHAIN_OPTIONS: ChainOption[] = [
   { id: "optimism", label: "Optimism", shortLabel: "OP", logo: "/crypto-logos/OP.png" },
   { id: "sui", label: "Sui", shortLabel: "SUI", logo: "/crypto-logos/SUI.png" },
   { id: "pulsechain", label: "PulseChain", shortLabel: "PLS", logo: "/crypto-logos/PulseChain.png" },
+  { id: "robinhood", label: "Robinhood Chain", shortLabel: "ROBIN", logo: "/crypto-logos/RobinHood.png" },
 ]
 
 const CHAIN_BY_ID = new Map(CHAIN_OPTIONS.map((chain) => [chain.id, chain]))

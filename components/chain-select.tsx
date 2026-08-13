@@ -1,7 +1,7 @@
 "use client"
 
 import { Check, ChevronDown } from "lucide-react"
-import { KeyboardEvent, useEffect, useId, useRef, useState } from "react"
+import { KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react"
 import { CHAIN_OPTIONS, getChainOption } from "@/lib/chains"
 import { ChainIcon } from "./chain-icon"
 
@@ -16,11 +16,12 @@ export function ChainSelect({ value, onChange, disabled = false }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
   const listboxId = useId()
-  const selected = getChainOption(value)
+  const selected = useMemo(() => getChainOption(value), [value])
+  const options = useMemo(() => CHAIN_OPTIONS.some((option) => option.id === value) ? CHAIN_OPTIONS : [...CHAIN_OPTIONS, selected], [selected, value])
 
   useEffect(() => {
     if (!open) return
-    const selectedIndex = Math.max(0, CHAIN_OPTIONS.findIndex((option) => option.id === value))
+    const selectedIndex = Math.max(0, options.findIndex((option) => option.id === value))
     optionRefs.current[selectedIndex]?.focus()
 
     function dismiss(event: MouseEvent) {
@@ -29,7 +30,7 @@ export function ChainSelect({ value, onChange, disabled = false }: Props) {
 
     document.addEventListener("mousedown", dismiss)
     return () => document.removeEventListener("mousedown", dismiss)
-  }, [open, value])
+  }, [open, options, value])
 
   function select(nextValue: string) {
     onChange(nextValue)
@@ -54,8 +55,8 @@ export function ChainSelect({ value, onChange, disabled = false }: Props) {
 
     if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Home" || event.key === "End") {
       event.preventDefault()
-      const last = CHAIN_OPTIONS.length - 1
-      const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? last : event.key === "ArrowDown" ? (index + 1) % CHAIN_OPTIONS.length : (index - 1 + CHAIN_OPTIONS.length) % CHAIN_OPTIONS.length
+      const last = options.length - 1
+      const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? last : event.key === "ArrowDown" ? (index + 1) % options.length : (index - 1 + options.length) % options.length
       optionRefs.current[nextIndex]?.focus()
     }
   }
@@ -70,7 +71,7 @@ export function ChainSelect({ value, onChange, disabled = false }: Props) {
 
       {open && (
         <div aria-label="Choose a chain" className="chain-select-menu" id={listboxId} role="listbox">
-          {CHAIN_OPTIONS.map((option, index) => (
+          {options.map((option, index) => (
             <button aria-selected={option.id === value} className="chain-select-option" key={option.id} onClick={() => select(option.id)} onKeyDown={(event) => handleOptionKeyDown(event, index)} ref={(node) => { optionRefs.current[index] = node }} role="option" tabIndex={option.id === value ? 0 : -1} type="button">
               <ChainIcon chainId={option.id} size={25} />
               <span><strong>{option.id === "all" ? "All Chains" : option.label}</strong><small>{option.id === "all" ? "Automatic detection" : option.shortLabel}</small></span>

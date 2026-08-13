@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Bookmark, Calculator, Clock3, Gauge, HelpCircle, Rocket, Settings } from "lucide-react"
@@ -22,7 +23,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="app-shell">
       <aside className="side-rail">
         <Link className="brand" href="/" aria-label="MemeCap home">
-          <span className="brand-mark">M</span>
+          <span className="brand-mark"><Image alt="" aria-hidden="true" className="brand-logo" height={36} priority src="/brand/memecap-logo.png" width={36} /></span>
           <span>MemeCap<small>position simulator</small></span>
         </Link>
         <nav className="nav-links" aria-label="Primary navigation">
@@ -41,7 +42,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className="page-shell">
         <header className="topbar">
           <Link className="brand" href="/" aria-label="MemeCap home">
-            <span className="brand-mark">M</span>
+            <span className="brand-mark"><Image alt="" aria-hidden="true" className="brand-logo" height={36} priority src="/brand/memecap-logo.png" width={36} /></span>
             <span className="desktop-only">MemeCap</span>
           </Link>
           <div className="topbar-status"><span className="status-dot" aria-hidden="true" /> DEX DATA READY</div>

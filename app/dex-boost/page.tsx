@@ -13,11 +13,8 @@ const BOOST_PACKS = [
   { boosts: 10, duration: "12 hours", price: 99, featured: false },
   { boosts: 30, duration: "12 hours", price: 249, featured: false },
   { boosts: 50, duration: "12 hours", price: 399, featured: true },
-] as const
-
-const EXTENDED_PACKS = [
-  { boosts: 100, duration: "24 hours", price: 899 },
-  { boosts: 500, duration: "24 hours", price: 3999 },
+  { boosts: 100, duration: "24 hours", price: 899, featured: false },
+  { boosts: 500, duration: "24 hours", price: 3999, featured: false },
 ] as const
 
 const BOOST_FACTS = [
@@ -62,10 +59,16 @@ export default function DexBoostPage() {
             </article>
           ))}
         </div>
-        <div className="boost-extended-row tnum">
-          <span>Also verified:</span>
-          {EXTENDED_PACKS.map((pack) => <strong key={pack.boosts}>{pack.boosts}× · ${pack.price.toLocaleString("en-US")} · {pack.duration}</strong>)}
-        </div>
+        <figure className="boost-reference-figure">
+          <Image
+            alt="Official DEX Screener Boost checkout showing 10, 30, 50, 100, and 500 Boost packs with prices and durations"
+            height={834}
+            sizes="(min-width: 960px) 72rem, 100vw"
+            src="/references/dex-screener-boost-pricing-2026-08-13.png"
+            width={1518}
+          />
+          <figcaption><strong>Official checkout evidence</strong><span>Captured August 13, 2026. Checkout prices can change; confirm the live total before payment.</span></figcaption>
+        </figure>
         <div className="boost-price-copy panel-body">
           <p>Boosts temporarily raise a token’s <strong>Trending Score</strong> and visible active-Boost count. The official checkout says the Golden Ticker unlocks at 500 active Boosts.</p>
           <p>Boosting does not add liquidity, guarantee Trending rank, create buyers, or guarantee price appreciation.</p>
