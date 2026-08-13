@@ -2,9 +2,10 @@
 
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { AlertTriangle, ArrowUpRight, Bookmark, BookmarkCheck, Check, Copy, ExternalLink, Info, RefreshCw, Rocket, Search } from "lucide-react"
+import { AlertTriangle, ArrowUpRight, Bookmark, BookmarkCheck, Check, Copy, ExternalLink, Flame, Info, RefreshCw, Rocket, Search, TrendingUp, WalletCards } from "lucide-react"
 import { ClipboardEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { buildSimulationRows, resolveSimulationBasis } from "@/lib/calculations"
+import { buildSimulationRows, calculateTradeOutcome, resolveSimulationBasis } from "@/lib/calculations"
+import type { TradeStatus } from "@/lib/calculations"
 import { getChainOption, parseTokenInput } from "@/lib/chains"
 import { formatAge, formatMultiple, formatPercent, formatToken, formatUsd, parseNumericInput, truncateAddress } from "@/lib/format"
 import { getSavedTokens, getSettings, pushHistory, setSavedTokens } from "@/lib/storage"
@@ -25,6 +26,8 @@ export function Simulator({ initialChain = "all", initialAddress = "" }: Props) 
   const [error, setError] = useState("")
   const [tokenAmount, setTokenAmount] = useState("")
   const [costBasis, setCostBasis] = useState("")
+  const [tradeStatus, setTradeStatus] = useState<TradeStatus>("holding")
+  const [exitProceeds, setExitProceeds] = useState("")
   const [supply, setSupply] = useState("")
   const [supplyKind, setSupplyKind] = useState<SupplyKind>("auto")
   const [customTarget, setCustomTarget] = useState("25000000")
@@ -103,15 +106,20 @@ export function Simulator({ initialChain = "all", initialAddress = "" }: Props) 
   const pair = data?.pair ?? null
   const amount = parseNumericInput(tokenAmount)
   const cost = parseNumericInput(costBasis)
+  const exitValue = parseNumericInput(exitProceeds)
   const supplyValue = parseNumericInput(supply)
   const customValue = parseNumericInput(customTarget)
   const price = Number(pair?.priceUsd)
   const currentValue = Number.isFinite(amount) && Number.isFinite(price) ? amount * price : 0
+  const tradeOutcome = calculateTradeOutcome({ status: tradeStatus, tokenAmount: amount, currentPrice: price, costBasis: cost, exitProceeds: exitValue })
   const basis = pair ? resolveSimulationBasis(pair, supplyValue, supplyKind) : null
   const ownership = basis && Number.isFinite(amount) ? amount / basis.supply : 0
-  const rows = useMemo(() => basis && Number.isFinite(amount) && amount > 0 ? buildSimulationRows({ basis, tokenAmount: amount, currentValue, costBasis: Number.isFinite(cost) ? cost : 0, customTarget: Number.isFinite(customValue) ? customValue : undefined }) : [], [amount, basis, cost, currentValue, customValue])
+  const rows = basis && Number.isFinite(amount) && amount > 0 ? buildSimulationRows({ basis, tokenAmount: amount, currentValue, costBasis: Number.isFinite(cost) ? cost : 0, customTarget: Number.isFinite(customValue) ? customValue : undefined }) : []
   const selectedRow = rows.reduce((closest, row) => Math.abs(row.target - selectedTarget) < Math.abs(closest.target - selectedTarget) ? row : closest, rows[0])
   const roi = selectedRow && Number.isFinite(cost) && cost > 0 ? ((selectedRow.holdingsValue - cost) / cost) * 100 : null
+  const outcomeReady = tradeStatus === "exited" ? tradeOutcome.exitProceeds !== null : tradeOutcome.profit !== null
+  const missedGain = tradeOutcome.missedGain ?? 0
+  const exitBeatHolding = tradeStatus === "exited" && tradeOutcome.exitProceeds !== null && tradeOutcome.exitProceeds > tradeOutcome.currentValue
   const liquidity = pair?.liquidity?.usd ?? 0
   const liquidityWarning = selectedRow && liquidity > 0 && selectedRow.holdingsValue > liquidity * settings.liquidityWarningRatio
 
@@ -190,6 +198,14 @@ export function Simulator({ initialChain = "all", initialAddress = "" }: Props) 
               <div className="panel-body position-form">
                 <div className="field"><label htmlFor="tokens">Tokens Owned</label><input className="input tnum" id="tokens" inputMode="decimal" value={tokenAmount} onChange={(event) => setTokenAmount(event.target.value)} /></div>
                 <div className="field"><label htmlFor="cost">Initial Cost / Cost Basis (USD)</label><input className="input tnum" id="cost" inputMode="decimal" value={costBasis} onChange={(event) => setCostBasis(event.target.value)} /></div>
+                <fieldset className="trade-filter">
+                  <legend>Position Status</legend>
+                  <div className="trade-filter-options" role="group" aria-label="Filter trade status">
+                    <button aria-pressed={tradeStatus === "holding"} className="trade-filter-button" data-active={tradeStatus === "holding"} onClick={() => setTradeStatus("holding")} type="button"><WalletCards size={16} /> Holding</button>
+                    <button aria-pressed={tradeStatus === "exited"} className="trade-filter-button" data-active={tradeStatus === "exited"} onClick={() => setTradeStatus("exited")} type="button"><TrendingUp size={16} /> Exited</button>
+                  </div>
+                </fieldset>
+                {tradeStatus === "exited" && <div className="field"><label htmlFor="exit-proceeds">Total Exit Proceeds (USD)</label><input aria-describedby="exit-proceeds-help" className="input tnum" id="exit-proceeds" inputMode="decimal" value={exitProceeds} onChange={(event) => setExitProceeds(event.target.value)} placeholder="e.g. 2.5K" /><span className="field-help" id="exit-proceeds-help">Enter the total USD received from selling this full token amount.</span></div>}
                 <div className="field"><label htmlFor="supply-kind">Supply Basis</label><select className="select" id="supply-kind" value={supplyKind} onChange={(event) => setSupplyKind(event.target.value as SupplyKind)}><option value="auto">Auto from DEX data</option><option value="circulating">Circulating supply</option><option value="total">Total supply</option></select></div>
                 {supplyKind !== "auto" && <div className="field"><label htmlFor="supply">{supplyKind === "circulating" ? "Circulating" : "Total"} Supply</label><input className="input tnum" id="supply" inputMode="decimal" value={supply} onChange={(event) => setSupply(event.target.value)} placeholder="e.g. 1B" /></div>}
                 {basis ? <div className="basis-banner"><Info size={18} aria-hidden="true" /><div><strong>{basis.label}</strong><p>{basis.supplyLabel}: {formatToken(basis.supply)}{basis.source === "estimated" ? " · derived from current valuation ÷ price; not official supply" : " · user supplied"}</p></div></div> : <div className="warning-box"><AlertTriangle size={18} /><div><strong>Supply unavailable</strong><p>Enter circulating or total supply to enable a transparent simulation.</p></div></div>}
@@ -199,7 +215,7 @@ export function Simulator({ initialChain = "all", initialAddress = "" }: Props) 
                 <Metric label="Supply Ownership" value={basis ? `${(ownership * 100).toLocaleString("en-US", { maximumFractionDigits: 6 })}%` : "—"} />
                 <Metric label="Current Price" value={formatUsd(price, false)} />
                 <Metric label="Current Value" value={formatUsd(currentValue, false)} />
-                <Metric label="Current PnL" value={Number.isFinite(cost) && cost > 0 ? formatUsd(currentValue - cost, false) : "—"} tone={currentValue - cost >= 0 ? "positive" : "negative"} />
+                <Metric label={tradeStatus === "exited" ? "Realized Profit" : "Unrealized PnL"} value={tradeOutcome.profit === null ? "—" : formatUsd(tradeOutcome.profit, false)} tone={(tradeOutcome.profit ?? 0) >= 0 ? "positive" : "negative"} />
                 <Metric label="Current MC" value={formatUsd(pair.marketCap)} />
                 <Metric label="FDV" value={formatUsd(pair.fdv)} />
                 <Metric label="Liquidity" value={formatUsd(liquidity)} />
@@ -212,9 +228,32 @@ export function Simulator({ initialChain = "all", initialAddress = "" }: Props) 
                 <div className="field"><label htmlFor="custom-target">Custom Market Cap</label><input className="input tnum" id="custom-target" inputMode="decimal" value={customTarget} onChange={(event) => setCustomTarget(event.target.value)} placeholder="2.5M, 25M, 500M" /></div>
               </div>
               {basis && rows.length > 0 ? <div className="table-wrap"><table className="sim-table"><thead><tr><th>Target {basis.kind === "marketCap" ? "MC" : "FDV"}</th><th>Target Price</th><th>Holdings Value</th><th>Multiple</th><th>Profit</th></tr></thead><tbody>{rows.map((row) => <tr data-highlight={row.tags.length > 0} data-selected={row.target === selectedTarget} key={row.target}><td><div className="table-target"><button className="btn btn-quiet" onClick={() => setSelectedTarget(row.target)} type="button">{formatUsd(row.target)}</button>{row.tags.length > 0 && <span className="tags">{row.tags.map((tag) => <span className={`tag ${tag === "Current" || tag === "Custom" ? "tag-accent" : ""}`} key={tag}>{tag}</span>)}</span>}</div></td><td>{formatUsd(row.targetPrice, false)}</td><td>{formatUsd(row.holdingsValue, false)}</td><td>{formatMultiple(row.multiple)}</td><td className={(row.profit ?? 0) >= 0 ? "positive" : "negative"}>{formatUsd(row.profit, false)}</td></tr>)}</tbody></table></div> : <div className="empty-state"><Info size={24} /><p>A valid supply basis and token amount are required for target calculations.</p></div>}
-              {selectedRow && <div className="panel-body token-actions"><button className="btn" onClick={recordHistory} type="button"><Check size={16} /> Save to History</button><ShareDialog symbol={pair.baseToken.symbol} tokenAmount={amount} currentMarketCap={basis?.currentValuation ?? null} targetMarketCap={selectedRow.target} currentValue={currentValue} targetValue={selectedRow.holdingsValue} multiple={selectedRow.multiple} roi={roi} /></div>}
+              {selectedRow && <div className="panel-body token-actions"><button className="btn" onClick={recordHistory} type="button"><Check size={16} /> Save to History</button><ShareDialog symbol={pair.baseToken.symbol} tokenAmount={amount} currentMarketCap={basis?.currentValuation ?? null} targetMarketCap={selectedRow.target} currentValue={currentValue} targetValue={selectedRow.holdingsValue} multiple={selectedRow.multiple} roi={roi} costBasis={cost} currentPrice={price} tradeOutcome={tradeOutcome} /></div>}
             </section>
           </div>
+
+          {outcomeReady && selectedRow && <section className="trade-outcome" data-mode={tradeStatus} aria-labelledby="trade-outcome-title">
+            <div className="trade-outcome-copy">
+              <span className="trade-outcome-icon">{tradeStatus === "exited" ? <Flame size={24} aria-hidden="true" /> : <TrendingUp size={24} aria-hidden="true" />}</span>
+              <div>
+                <p className="trade-outcome-kicker">{tradeStatus === "exited" ? "Post-trade reality check" : "Live position result"}</p>
+                <h2 id="trade-outcome-title">{tradeStatus === "exited" ? missedGain > 0 ? (tradeOutcome.profit ?? 0) >= 0 ? "You took profit. The chart kept running." : "You exited. The chart kept running." : exitBeatHolding ? "Your exit still beats holding." : "Your exit matches today’s paper value." : (tradeOutcome.profit ?? 0) >= 0 ? "The position is in profit." : "The position is below cost."}</h2>
+                <p>{tradeStatus === "exited" ? "Missed gain compares your full exit proceeds with what the same tokens would be worth now. It is a paper comparison, not guaranteed sellable value." : "Profit remains unrealized until the position is sold. Live value can change with price, liquidity, taxes, and slippage."}</p>
+              </div>
+            </div>
+            <div className="trade-outcome-hero tnum">
+              <span>{tradeStatus === "exited" ? exitBeatHolding ? "Exit advantage" : "Missed gain" : "Unrealized PnL"}</span>
+              <strong className={tradeStatus === "exited" ? exitBeatHolding ? "positive" : "warning-text" : (tradeOutcome.profit ?? 0) >= 0 ? "positive" : "negative"}>{formatUsd(tradeStatus === "exited" ? exitBeatHolding ? (tradeOutcome.exitProceeds ?? 0) - tradeOutcome.currentValue : missedGain : tradeOutcome.profit, false)}</strong>
+              <small>{tradeStatus === "exited" && !exitBeatHolding && tradeOutcome.holdMultipleAfterExit !== null ? `Holding would now be ${formatMultiple(tradeOutcome.holdMultipleAfterExit)} of your exit value.` : tradeStatus === "exited" ? "Your realized exit remains ahead of today's paper value." : `ROI ${tradeOutcome.roi === null ? "—" : `${tradeOutcome.roi.toLocaleString("en-US", { maximumFractionDigits: 1 })}%`}`}</small>
+            </div>
+            <div className="trade-outcome-ledger tnum">
+              <div><span>Cost basis</span><strong>{formatUsd(cost, false)}</strong></div>
+              <div><span>{tradeStatus === "exited" ? "Exit proceeds" : "Current value"}</span><strong>{formatUsd(tradeStatus === "exited" ? tradeOutcome.exitProceeds : tradeOutcome.currentValue, false)}</strong></div>
+              <div><span>{tradeStatus === "exited" ? "Realized profit" : "Profit status"}</span><strong className={(tradeOutcome.profit ?? 0) >= 0 ? "positive" : "negative"}>{formatUsd(tradeOutcome.profit, false)}</strong></div>
+              {tradeStatus === "exited" && <div><span>Worth today</span><strong>{formatUsd(tradeOutcome.currentValue, false)}</strong></div>}
+            </div>
+            <ShareDialog symbol={pair.baseToken.symbol} tokenAmount={amount} currentMarketCap={basis?.currentValuation ?? null} targetMarketCap={selectedRow.target} currentValue={currentValue} targetValue={selectedRow.holdingsValue} multiple={selectedRow.multiple} roi={roi} costBasis={cost} currentPrice={price} tradeOutcome={tradeOutcome} initialVariant={tradeStatus === "exited" ? "missed" : "profit"} triggerLabel={tradeStatus === "exited" ? "Share FOMO Card" : "Share Profit Card"} />
+          </section>}
 
           {basis && Number.isFinite(amount) && amount > 0 && <section className="section-stack" aria-labelledby="scenarios-title"><div className="section-heading"><div><h2 id="scenarios-title">Position scenarios</h2><p>Calculated from the same supply basis above—not from preset dollar outcomes.</p></div></div><div className="scenario-grid">{[
             ["Conservative", 500_000], ["Bull", 5_000_000], ["Moon", 100_000_000], ["Insane", 1_000_000_000],

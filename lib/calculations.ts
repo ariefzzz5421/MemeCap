@@ -1,6 +1,69 @@
 import type { DexPair, SimulationBasis, SimulationRow, SupplyKind } from "./types"
 
+export type TradeStatus = "holding" | "exited"
+
+export type TradeOutcome = {
+  status: TradeStatus
+  currentValue: number
+  exitProceeds: number | null
+  exitPrice: number | null
+  profit: number | null
+  roi: number | null
+  missedGain: number | null
+  missedGainPercent: number | null
+  holdMultipleAfterExit: number | null
+}
+
 export const DEFAULT_TARGETS = [100_000, 500_000, 1_000_000, 5_000_000, 10_000_000, 100_000_000, 1_000_000_000]
+
+export function calculateTradeOutcome({
+  status,
+  tokenAmount,
+  currentPrice,
+  costBasis,
+  exitProceeds,
+}: {
+  status: TradeStatus
+  tokenAmount: number
+  currentPrice: number
+  costBasis: number
+  exitProceeds: number
+}): TradeOutcome {
+  const hasPosition = Number.isFinite(tokenAmount) && tokenAmount > 0 && Number.isFinite(currentPrice) && currentPrice >= 0
+  const currentValue = hasPosition ? tokenAmount * currentPrice : 0
+  const hasCost = Number.isFinite(costBasis) && costBasis > 0
+
+  if (status === "holding") {
+    const profit = hasCost && hasPosition ? currentValue - costBasis : null
+    return {
+      status,
+      currentValue,
+      exitProceeds: null,
+      exitPrice: null,
+      profit,
+      roi: profit === null ? null : (profit / costBasis) * 100,
+      missedGain: null,
+      missedGainPercent: null,
+      holdMultipleAfterExit: null,
+    }
+  }
+
+  const hasExit = Number.isFinite(exitProceeds) && exitProceeds > 0 && hasPosition
+  const realizedProfit = hasCost && hasExit ? exitProceeds - costBasis : null
+  const missedGain = hasExit ? Math.max(currentValue - exitProceeds, 0) : null
+
+  return {
+    status,
+    currentValue,
+    exitProceeds: hasExit ? exitProceeds : null,
+    exitPrice: hasExit ? exitProceeds / tokenAmount : null,
+    profit: realizedProfit,
+    roi: realizedProfit === null ? null : (realizedProfit / costBasis) * 100,
+    missedGain,
+    missedGainPercent: missedGain === null ? null : (missedGain / exitProceeds) * 100,
+    holdMultipleAfterExit: hasExit ? currentValue / exitProceeds : null,
+  }
+}
 
 export function resolveSimulationBasis(
   pair: DexPair,
