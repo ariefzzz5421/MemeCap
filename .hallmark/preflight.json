@@ -1,8 +1,8 @@
 {
-  "date": "2026-08-13",
+  "date": "2026-08-14",
   "framework": "Next.js 16 App Router",
   "fontStack": "Geist + Geist Mono",
-  "palette": "new OKLCH dark terminal palette",
+  "palette": "dual-mode OKLCH terminal-paper palette",
   "motion": "motion-cut with functional feedback only",
   "spacing": "4pt semantic scale"
 }

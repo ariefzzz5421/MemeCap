@@ -3,7 +3,8 @@
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Bookmark, Calculator, Clock3, Gauge, HelpCircle, Rocket, Settings } from "lucide-react"
+import { useLayoutEffect } from "react"
+import { Bookmark, Calculator, Clock3, Gauge, HelpCircle, Moon, Rocket, Settings, Sun } from "lucide-react"
 
 const NAV_ITEMS = [
   { href: "/", label: "Simulator", shortLabel: "Sim", icon: Gauge },
@@ -14,6 +15,37 @@ const NAV_ITEMS = [
   { href: "/guide", label: "Guide", shortLabel: "Guide", icon: HelpCircle },
   { href: "/settings", label: "Settings", shortLabel: "Prefs", icon: Settings },
 ]
+
+const THEME_STORAGE_KEY = "memecap-theme"
+
+function ThemeToggle({ compact = false }: { compact?: boolean }) {
+  useLayoutEffect(() => {
+    const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
+    const preferredTheme = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"
+    document.documentElement.dataset.theme = savedTheme === "light" || savedTheme === "dark" ? savedTheme : preferredTheme
+  }, [])
+
+  function toggleTheme() {
+    const nextTheme = document.documentElement.dataset.theme === "light" ? "dark" : "light"
+    document.documentElement.dataset.theme = nextTheme
+    window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme)
+  }
+
+  return (
+    <button
+      aria-label="Switch between light and dark mode"
+      className={`theme-toggle${compact ? " theme-toggle-compact" : ""}`}
+      onClick={toggleTheme}
+      title="Switch color mode"
+      type="button"
+    >
+      <Sun aria-hidden="true" className="theme-to-light" size={18} />
+      <Moon aria-hidden="true" className="theme-to-dark" size={18} />
+      <span className="theme-label theme-to-light">Light mode</span>
+      <span className="theme-label theme-to-dark">Dark mode</span>
+    </button>
+  )
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -33,10 +65,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </nav>
-        <div className="rail-foot">
-          <p>DEX Screener data</p>
-          <p>Simulation only · NFA</p>
-        </div>
+        <div className="rail-foot"><ThemeToggle /></div>
       </aside>
 
       <main className="page-shell">
@@ -45,7 +74,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="brand-mark"><Image alt="" aria-hidden="true" className="brand-logo" height={36} priority src="/brand/memecap-logo.png" width={36} /></span>
             <span className="desktop-only">MemeCap</span>
           </Link>
-          <div className="topbar-status"><span className="status-dot" aria-hidden="true" /> DEX DATA READY</div>
+          <div className="topbar-controls">
+            <div className="topbar-status"><span className="status-dot" aria-hidden="true" /> <span>DEX DATA READY</span></div>
+            <div className="mobile-theme-toggle"><ThemeToggle compact /></div>
+          </div>
         </header>
         {children}
         <footer className="footer-line">MemeCap Simulator · Estimated values are not guaranteed realizable profit · Data by DEX Screener</footer>
